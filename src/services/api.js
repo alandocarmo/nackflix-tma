@@ -14,3 +14,23 @@ export async function fetchFeed({ creator, tag, limit } = {}) {
   if (!res.ok) throw new Error("feed_failed");
   return res.json();
 }
+
+export async function startSession(tgUserId) {
+  const res = await fetch(`${BACKEND_BASE_URL}/session/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tgUserId })
+  });
+  if (!res.ok) throw new Error("session_start_failed");
+  return res.json();
+}
+
+export async function pingSession({ sessionId, event, proofsDelta = 0, videoDelta = 0 }) {
+  const res = await fetch(`${BACKEND_BASE_URL}/session/ping`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, event, proofsDelta, videoDelta })
+  });
+  if (!res.ok) throw new Error("session_ping_failed");
+  return res.json();
+}

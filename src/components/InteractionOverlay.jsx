@@ -1,21 +1,26 @@
 import { useState, useEffect } from "react";
 import { scheduleRandomEvent } from "../engine/interactionEngine";
 import { registerTap, isHumanRhythm } from "../engine/rhythmAnalyzer";
+import { useEpochStore } from "../store/epochStore";
+import { pingSession } from "../services/api";
 
-export default function InteractionOverlay() {
+export default function InteractionOverlay({ sessionId }) {
   const [visible, setVisible] = useState(false);
+  const { markProofAccepted, syncEpochNow } = useEpochStore();
 
   useEffect(() => {
     scheduleRandomEvent(() => setVisible(true));
   }, []);
 
-  function handleTap() {
+  async function handleTap() {
     registerTap();
 
+    syncEpochNow();
     if (isHumanRhythm()) {
-      console.log("NackFlix: prova humana válida (local)");
-    } else {
-      console.log("NackFlix: padrão suspeito (ajustar dificuldade depois)");
+      markProofAccepted();
+      try {
+        if (sessionId) await pingSession({ sessionId, event: "proof_ok", proofsDelta: 1 });
+      } catch {}
     }
 
     setVisible(false);

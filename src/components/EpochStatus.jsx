@@ -1,20 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useEpochStore } from "../store/epochStore";
+
+function formatMMSS(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 export default function EpochStatus() {
-  const [timeLeft, setTimeLeft] = useState(300); // 5 min “visual”
+  const { epochLengthSec, epochStartMs, epochId, proofsAccepted, syncEpochNow } = useEpochStore();
+  const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 300));
-    }, 1000);
+    const t = setInterval(() => {
+      syncEpochNow();
+      setNowMs(Date.now());
+    }, 500);
+    return () => clearInterval(t);
+  }, [syncEpochNow]);
 
-    return () => clearInterval(interval);
-  }, []);
+  const timeLeft = useMemo(() => {
+    const elapsedSec = Math.floor((nowMs - epochStartMs) / 1000);
+    const left = Math.max(0, epochLengthSec - elapsedSec);
+    return left;
+  }, [nowMs, epochStartMs, epochLengthSec]);
 
   return (
     <div style={{ padding: "10px", fontSize: "14px" }}>
-      ⛏️ Mobile Verifier: ativo (no device) <br />
-      ⏱️ Próxima recompensa (epoch): {timeLeft}s
+      <div>⛏️ Mobile Verifier: ativo (no device)</div>
+      <div>🧺 Epoch #{epochId} — termina em {formatMMSS(timeLeft)}</div>
+      <div>✅ Provas aceitas neste epoch: {proofsAccepted}</div>
     </div>
   );
 }

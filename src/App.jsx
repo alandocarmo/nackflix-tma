@@ -1,70 +1,99 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { initTelegram } from "./core/telegram";
-import Home from "./pages/Home";
 import Watch from "./pages/Watch";
-import { fetchFeed, startSession, pingSession } from "./services/api";
+import { fetchFeed, startSession } from "./services/api";
 
 export default function App() {
-  const [screen, setScreen] = useState("home");
   const [user, setUser] = useState(null);
-
   const [sessionId, setSessionId] = useState(null);
 
   const [feed, setFeed] = useState([]);
   const [videoIndex, setVideoIndex] = useState(0);
 
-  const currentVideo = feed.length ? feed[videoIndex % feed.length] : null;
+  const [loading, setLoading] = useState(true);
+  const [bootError, setBootError] = useState(null);
+
+  const currentVideo = useMemo(() => {
+    if (!feed.length) return null;
+    return feed[videoIndex % feed.length];
+  }, [feed, videoIndex]);
 
   useEffect(() => {
-    const data = initTelegram();
-    if (data?.user) setUser(data.user);
+    let alive = true;
 
     (async () => {
-      // 1) carregar feed
-      const { videos } = await fetchFeed({ limit: 20 });
-      setFeed(videos || []);
+      try {
+        setLoading(true);
+        setBootError(null);
 
-      // 2) iniciar sessão (MVP)
-      const started = await startSession(data?.user?.id || null);
-      setSessionId(started.sessionId);
-    })().catch((e) => console.error("boot_failed", e));
+        // Telegram init (fora do Telegram pode vir null — ok)
+        const tgData = initTelegram();
+        if (alive && tgData?.user) setUser(tgData.user);
+
+        // 1) carregar feed do backend
+        const { videos } = await fetchFeed({ limit: 30 });
+        if (!alive) return;
+
+        const safeVideos = Array.isArray(videos) ? videos : [];
+        setFeed(safeVideos);
+
+        // 2) iniciar sessão (MVP)
+        const started = await startSession(tgData?.user?.id || null);
+        if (!alive) return;
+        setSessionId(started.sessionId || null);
+
+        setLoading(false);
+      } catch (e) {
+        console.error("boot_failed", e);
+        if (!alive) return;
+        setBootError(e?.message || "boot_failed");
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  return (
-    <div style={{ fontFamily: "system-ui, Arial" }}>
-      {screen === "home" && (
-        <div>
-          <div style={{ padding: 16, fontSize: 12, opacity: 0.7 }}>
-            {user ? `Telegram: ${user.first_name}` : "Telegram: (abrindo fora do app)"}
-            <br />
-            {sessionId ? `Sessão: ${sessionId}` : "Sessão: carregando..."}
-          </div>
+  // UI de loading
+  if (loading) {
+    return (
+      <div style={{ padding: 16, fontFamily: "system-ui, Arial" }}>
+        Carregando NackFlix...
+      </div>
+    );
+  }
 
-          <Home
-            onStart={() => setScreen("watch")}
-          />
+  // UI de erro
+  if (bootError) {
+    return (
+      <div style={{ padding: 16, fontFamily: "system-ui, Arial" }}>
+        <div style={{ marginBottom: 8 }}>Falha ao iniciar.</div>
+        <div style={{ opacity: 0.7, fontSize: 13 }}>
+          {String(bootError)}
         </div>
-      )}
+        <div style={{ marginTop: 12, fontSize: 13, opacity: 0.7 }}>
+          Dica: confirme se o backend está online e se o CORS_ORIGIN no Render é exatamente o domínio do Vercel (sem barra final).
+        </div>
+      </div>
+    );
+  }
 
-      {screen === "watch" && currentVideo && (
-        <Watch
-          videoId={currentVideo.id}
-          videoTitle={currentVideo.title}
-          videoIndex={videoIndex}
-          sessionId={sessionId}
-          onVideoEnd={async () => {
-            try {
-              if (sessionId) await pingSession({ sessionId, event: "video_end", videoDelta: 1 });
-            } catch {}
-            setVideoIndex((v) => v + 1);
-            setScreen("home");
-          }}
-        />
-      )}
+  // Sem vídeos
+  if (!currentVideo) {
+    return (
+      <div style={{ padding: 16, fontFamily: "system-ui, Arial" }}>
+        Nenhum vídeo disponível no feed.
+      </div>
+    );
+  }
 
-      {screen === "watch" && !currentVideo && (
-        <div style={{ padding: 16 }}>Carregando feed...</div>
-      )}
-    </div>
+  return (
+    <Watch
+      video={currentVideo}
+      sessionId={sessionId}
+      onNext={() => setVideoIndex((v) => v + 1)}
+    />
   );
 }

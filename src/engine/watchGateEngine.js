@@ -1,15 +1,13 @@
 export const WATCH_WINDOW_SEC = 30;
-export const CHALLENGE_COUNT = 5;
+export const CHALLENGE_COUNT = 3;
 
-// agenda 5 timestamps dentro de 30s (espalhados, sem ficar tudo junto)
+// agenda 3 timestamps dentro de 30s (espalhados e previsíveis o suficiente para UX)
 export function buildSchedule() {
-  // janelas sugeridas (segundos): 4-6, 8-10, 12-14, 16-20, 22-26
+  // janelas em segundos: 6–9, 14–18, 22–26
   const windows = [
-    [4, 6],
-    [8, 10],
-    [12, 14],
-    [16, 20],
-    [22, 26]
+    [6, 9],
+    [14, 18],
+    [22, 26],
   ];
 
   return windows.map(([a, b]) => randInt(a, b));

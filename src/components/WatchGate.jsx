@@ -10,16 +10,17 @@ function clamp(n, a, b) {
 export default function WatchGate({ sessionId, onGateComplete }) {
   const [elapsed, setElapsed] = useState(0);
   const [passed, setPassed] = useState(0);
-  const [schedule] = useState(() => buildSchedule());
+
+  const [schedule] = useState(() => buildSchedule()); // 3 timestamps
   const [activeChallengeIndex, setActiveChallengeIndex] = useState(null);
-  const [challengeDoneSet, setChallengeDoneSet] = useState(() => new Set());
+  const [doneSet, setDoneSet] = useState(() => new Set());
 
   const runningRef = useRef(true);
   const startRef = useRef(Date.now());
   const pausedAccumRef = useRef(0);
   const pauseStartRef = useRef(null);
 
-  // pausa timer quando aba não está visível (evita completar 30s “em background”)
+  // pausa se a aba ficar oculta (evita completar 30s no background)
   useEffect(() => {
     function onVis() {
       if (document.hidden) {
@@ -37,7 +38,7 @@ export default function WatchGate({ sessionId, onGateComplete }) {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  // ticker 200ms
+  // ticker
   useEffect(() => {
     const t = setInterval(() => {
       if (!runningRef.current) return;
@@ -47,9 +48,11 @@ export default function WatchGate({ sessionId, onGateComplete }) {
       const sec = clamp(Math.floor(effectiveElapsedMs / 1000), 0, WATCH_WINDOW_SEC);
       setElapsed(sec);
 
-      // ativa desafios conforme schedule
+      // ativa desafios conforme schedule (um por vez)
+      if (activeChallengeIndex !== null) return;
+
       for (let i = 0; i < schedule.length; i++) {
-        if (sec >= schedule[i] && !challengeDoneSet.has(i) && activeChallengeIndex === null) {
+        if (sec >= schedule[i] && !doneSet.has(i)) {
           setActiveChallengeIndex(i);
           break;
         }
@@ -57,35 +60,32 @@ export default function WatchGate({ sessionId, onGateComplete }) {
     }, 200);
 
     return () => clearInterval(t);
-  }, [schedule, challengeDoneSet, activeChallengeIndex]);
+  }, [schedule, doneSet, activeChallengeIndex]);
 
   const timeLeft = WATCH_WINDOW_SEC - elapsed;
 
-  const progressPct = useMemo(() => {
-    return (elapsed / WATCH_WINDOW_SEC) * 100;
-  }, [elapsed]);
+  const progressPct = useMemo(() => (elapsed / WATCH_WINDOW_SEC) * 100, [elapsed]);
 
   const ready = elapsed >= WATCH_WINDOW_SEC && passed >= CHALLENGE_COUNT;
 
   async function markChallengePassed() {
-    // marca o desafio atual como concluído
-    setChallengeDoneSet((prev) => {
+    if (activeChallengeIndex === null) return;
+
+    setDoneSet((prev) => {
       const n = new Set(prev);
       n.add(activeChallengeIndex);
       return n;
     });
-
     setPassed((p) => p + 1);
     setActiveChallengeIndex(null);
 
-    // ping backend (não trava UX)
+    // ping prova (não trava UX)
     try {
       if (sessionId) await pingSession({ sessionId, event: "proof_ok", proofsDelta: 1 });
     } catch {}
   }
 
   async function completeGate() {
-    // ping de conclusão de 30s
     try {
       if (sessionId) await pingSession({ sessionId, event: "watch_30s_complete", videoDelta: 1 });
     } catch {}
@@ -96,7 +96,7 @@ export default function WatchGate({ sessionId, onGateComplete }) {
     <>
       <div className="gate-card">
         <div className="gate-title">
-          ⏱️ {timeLeft}s • ✅ Desafios: {passed}/{CHALLENGE_COUNT}
+          ⏱️ {timeLeft}s • ✅ Taps: {passed}/{CHALLENGE_COUNT}
         </div>
 
         <div className="gate-row" style={{ marginBottom: 10 }}>
@@ -109,7 +109,7 @@ export default function WatchGate({ sessionId, onGateComplete }) {
         </div>
 
         <div style={{ fontSize: 12, opacity: 0.75 }}>
-          Você libera o próximo vídeo após <b>30s</b> + <b>5 desafios</b>.
+          Libera após <b>30s</b> + <b>{CHALLENGE_COUNT} taps</b>.
         </div>
       </div>
 

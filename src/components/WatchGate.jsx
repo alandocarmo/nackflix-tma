@@ -96,7 +96,7 @@ export default function WatchGate({ sessionId, onGateComplete }) {
     <>
       <div className="gate-card">
         <div className="gate-title">
-          ⏱️ {timeLeft}s • ✅ Taps: {passed}/{CHALLENGE_COUNT}
+          ⏱️ {timeLeft}s • ✅ Desafios: {passed}/{CHALLENGE_COUNT}
         </div>
 
         <div className="gate-row" style={{ marginBottom: 10 }}>

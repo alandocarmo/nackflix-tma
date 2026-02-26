@@ -94,6 +94,7 @@ export default function App() {
       video={currentVideo}
       sessionId={sessionId}
       onNext={() => setVideoIndex((v) => v + 1)}
+      onPrev={() => setVideoIndex((v) => (v - 1 + feed.length) % feed.length)}
     />
   );
 }

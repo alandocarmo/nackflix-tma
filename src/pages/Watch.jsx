@@ -4,8 +4,16 @@ import VideoPlayer from "../components/VideoPlayer";
 import WatchHUD from "../components/WatchHUD";
 import { pingSession } from "../services/api";
 
-export default function Watch({ video, sessionId, onNext }) {
-  const swipeStartY = useRef(null);
+function getClientY(e) {
+  // React SyntheticEvent: touch e mouse
+  if (e?.touches && e.touches.length) return e.touches[0].clientY;
+  if (e?.changedTouches && e.changedTouches.length) return e.changedTouches[0].clientY;
+  if (typeof e?.clientY === "number") return e.clientY;
+  return null;
+}
+
+export default function Watch({ video, sessionId, onNext, onPrev }) {
+  const startYRef = useRef(null);
   const draggingRef = useRef(false);
 
   const [dragY, setDragY] = useState(0);
@@ -15,44 +23,59 @@ export default function Watch({ video, sessionId, onNext }) {
     return `mp4:${video?.source?.url || "unknown"}`;
   }, [video]);
 
-  function onPointerDown(e) {
+  function beginDrag(e) {
+    const y = getClientY(e);
+    if (y === null) return;
     draggingRef.current = true;
-    swipeStartY.current = e.clientY ?? (e.touches?.[0]?.clientY);
+    startYRef.current = y;
     setDragY(0);
   }
 
-  function onPointerMove(e) {
+  function moveDrag(e) {
     if (!draggingRef.current) return;
-    const y = e.clientY ?? (e.touches?.[0]?.clientY);
-    if (typeof y !== "number") return;
 
-    const delta = y - swipeStartY.current; // negativo = swipe up
-    // limita a arrastada
-    const clamped = Math.max(-220, Math.min(220, delta));
+    const y = getClientY(e);
+    if (y === null) return;
+
+    const delta = y - startYRef.current; // negativo = swipe up, positivo = swipe down
+    const clamped = Math.max(-260, Math.min(260, delta));
     setDragY(clamped);
   }
 
-  function onPointerUp() {
+  function endDrag() {
     if (!draggingRef.current) return;
     draggingRef.current = false;
 
-    // swipe up para próximo
-    if (dragY < -90) {
-      setDragY(-220);
-      // pequena animação e troca
+    // thresholds (ajuste se quiser)
+    const UP_THRESHOLD = -90;
+    const DOWN_THRESHOLD = 90;
+
+    if (dragY <= UP_THRESHOLD) {
+      // swipe up -> next
+      setDragY(-260);
       setTimeout(() => {
         setDragY(0);
         onNext?.();
-      }, 120);
+      }, 140);
       return;
     }
 
-    // volta ao lugar
+    if (dragY >= DOWN_THRESHOLD) {
+      // swipe down -> prev
+      setDragY(260);
+      setTimeout(() => {
+        setDragY(0);
+        onPrev?.();
+      }, 140);
+      return;
+    }
+
+    // volta ao centro
     setDragY(0);
   }
 
   async function handleThirtyDone() {
-    // não bloqueia: só reporta pro backend que "bateu 30s"
+    // não bloqueia: só reporta pro backend que completou 30s
     try {
       if (sessionId) await pingSession({ sessionId, event: "watch_30s_complete", videoDelta: 1 });
     } catch {}
@@ -61,21 +84,22 @@ export default function Watch({ video, sessionId, onNext }) {
   return (
     <div className="shorts-root">
       <div className="shorts-container">
-        {/* Player */}
+        {/* Player fullscreen */}
         <div className="shorts-player">
           <VideoPlayer source={video?.source} />
         </div>
 
-        {/* Swipe layer + animação */}
+        {/* Swipe layer (captura gesto sem travar UI acima) */}
         <div
           className="swipe-stage"
-          onTouchStart={onPointerDown}
-          onTouchMove={onPointerMove}
-          onTouchEnd={onPointerUp}
-          onMouseDown={onPointerDown}
-          onMouseMove={onPointerMove}
-          onMouseUp={onPointerUp}
-          onMouseLeave={onPointerUp}
+          onTouchStart={beginDrag}
+          onTouchMove={moveDrag}
+          onTouchEnd={endDrag}
+          onMouseDown={beginDrag}
+          onMouseMove={moveDrag}
+          onMouseUp={endDrag}
+          onMouseLeave={endDrag}
+          aria-hidden="true"
         >
           <div
             className="swipe-inner"
@@ -86,7 +110,7 @@ export default function Watch({ video, sessionId, onNext }) {
           />
         </div>
 
-        {/* Ações lado direito (placeholder) */}
+        {/* Actions direita (placeholder) */}
         <div className="shorts-actions">
           <div className="action-btn" title="Curtir">❤️</div>
           <div className="action-btn" title="Comentar">💬</div>
@@ -104,7 +128,7 @@ export default function Watch({ video, sessionId, onNext }) {
           </div>
         </div>
 
-        {/* HUD (timer + taps flutuantes) — reinicia por vídeo */}
+        {/* HUD: apenas timer + ícone flutuante (reinicia por vídeo) */}
         <WatchHUD
           key={videoKey}
           sessionId={sessionId}

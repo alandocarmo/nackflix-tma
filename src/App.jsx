@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { initTelegram } from "./core/telegram";
 import Watch from "./pages/Watch";
+import CreatorProfile from "./pages/CreatorProfile";
+import AdBreak from "./components/AdBreak";
 import { fetchFeed, startSession } from "./services/api";
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [sessionId, setSessionId] = useState(null);
+  const [mode, setMode] = useState("feed"); // "feed" | "creator" | "ad"
+  const [creatorHandle, setCreatorHandle] = useState("alan");
 
+  const [sessionId, setSessionId] = useState(null);
   const [feed, setFeed] = useState([]);
   const [videoIndex, setVideoIndex] = useState(0);
 
-  const [loading, setLoading] = useState(true);
-  const [bootError, setBootError] = useState(null);
+  const [completedVideos, setCompletedVideos] = useState(0);
 
   const currentVideo = useMemo(() => {
     if (!feed.length) return null;
@@ -19,82 +21,64 @@ export default function App() {
   }, [feed, videoIndex]);
 
   useEffect(() => {
-    let alive = true;
+    const tg = initTelegram();
 
     (async () => {
-      try {
-        setLoading(true);
-        setBootError(null);
+      const { videos } = await fetchFeed({ limit: 30 });
+      setFeed(videos || []);
 
-        // Telegram init (fora do Telegram pode vir null — ok)
-        const tgData = initTelegram();
-        if (alive && tgData?.user) setUser(tgData.user);
-
-        // 1) carregar feed do backend
-        const { videos } = await fetchFeed({ limit: 30 });
-        if (!alive) return;
-
-        const safeVideos = Array.isArray(videos) ? videos : [];
-        setFeed(safeVideos);
-
-        // 2) iniciar sessão (MVP)
-        const started = await startSession(tgData?.user?.id || null);
-        if (!alive) return;
-        setSessionId(started.sessionId || null);
-
-        setLoading(false);
-      } catch (e) {
-        console.error("boot_failed", e);
-        if (!alive) return;
-        setBootError(e?.message || "boot_failed");
-        setLoading(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
+      const started = await startSession(tg?.user?.id || null);
+      setSessionId(started.sessionId || null);
+    })().catch((e) => console.error("boot_failed", e));
   }, []);
 
-  // UI de loading
-  if (loading) {
-    return (
-      <div style={{ padding: 16, fontFamily: "system-ui, Arial" }}>
-        Carregando NackFlix...
-      </div>
-    );
+  function handleNextVideo() {
+    const nextCompleted = completedVideos + 1;
+    setCompletedVideos(nextCompleted);
+
+    // a cada 10 vídeos completos, entra no ad break
+    if (nextCompleted % 10 === 0) {
+      setMode("ad");
+      return;
+    }
+
+    setVideoIndex((v) => v + 1);
   }
 
-  // UI de erro
-  if (bootError) {
-    return (
-      <div style={{ padding: 16, fontFamily: "system-ui, Arial" }}>
-        <div style={{ marginBottom: 8 }}>Falha ao iniciar.</div>
-        <div style={{ opacity: 0.7, fontSize: 13 }}>
-          {String(bootError)}
-        </div>
-        <div style={{ marginTop: 12, fontSize: 13, opacity: 0.7 }}>
-          Dica: confirme se o backend está online e se o CORS_ORIGIN no Render é exatamente o domínio do Vercel (sem barra final).
-        </div>
-      </div>
-    );
+  function handleAdFinished() {
+    setVideoIndex((v) => v + 1);
+    setMode("feed");
   }
 
-  // Sem vídeos
+  if (mode === "creator") {
+    return <CreatorProfile handle={creatorHandle} />;
+  }
+
+  if (mode === "ad") {
+    return <AdBreak durationSec={10} onFinish={handleAdFinished} />;
+  }
+
   if (!currentVideo) {
-    return (
-      <div style={{ padding: 16, fontFamily: "system-ui, Arial" }}>
-        Nenhum vídeo disponível no feed.
-      </div>
-    );
+    return <div style={{ padding: 16 }}>Carregando feed...</div>;
   }
 
   return (
-    <Watch
-      video={currentVideo}
-      sessionId={sessionId}
-      onNext={() => setVideoIndex((v) => v + 1)}
-      onPrev={() => setVideoIndex((v) => (v - 1 + feed.length) % feed.length)}
-    />
+    <>
+      <button
+        onClick={() => setMode("creator")}
+        style={{ position: "absolute", zIndex: 20, top: 12, left: 12 }}
+      >
+        Criador
+      </button>
+
+      <Watch
+        video={currentVideo}
+        sessionId={sessionId}
+        onNext={handleNextVideo}
+        onPrev={() =>
+          setVideoIndex((v) => (v - 1 + feed.length) % feed.length)
+        }
+      />
+    </>
   );
 }

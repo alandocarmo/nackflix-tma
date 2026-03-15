@@ -130,3 +130,38 @@ export async function uploadCreatorVideo(file, creatorHandle, title, tags = []) 
 
   return video;
 }
+
+/* =========================
+   ADS
+========================= */
+
+export async function listAds() {
+  const res = await fetch(joinUrl(BACKEND_BASE_URL, "/ads"), {
+    method: "GET",
+  });
+
+  if (!res.ok) throw new Error("list_ads_failed");
+  return res.json();
+}
+
+export async function createAd(payload) {
+  const res = await fetch(joinUrl(BACKEND_BASE_URL, "/ads"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) throw new Error("create_ad_failed");
+  return res.json();
+}
+
+export async function markAdShown(adId, sessionId = null) {
+  const res = await fetch(joinUrl(BACKEND_BASE_URL, `/ads/${adId}/shown`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  });
+
+  if (!res.ok) throw new Error("mark_ad_shown_failed");
+  return res.json();
+}

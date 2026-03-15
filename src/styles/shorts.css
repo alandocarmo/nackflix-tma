@@ -157,19 +157,20 @@
   padding: 14px;
 }
 
-.adbreak-placeholder {
-  height: 260px;
+.adbreak-clickable {
+  cursor: pointer;
   border-radius: 16px;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 255, 255, 0.14)
-  );
-  display: grid;
-  place-items: center;
-  font-size: 16px;
-  text-align: center;
-  padding: 20px;
+  overflow: hidden;
+}
+
+.adbreak-video,
+.adbreak-image {
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+  display: block;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .adbreak-info {
@@ -185,4 +186,31 @@
 .adbreak-subtitle {
   font-size: 13px;
   opacity: 0.75;
+  margin-bottom: 14px;
+}
+
+.adbreak-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.adbreak-timer {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.adbreak-cta {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.20);
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  cursor: pointer;
+}
+
+.adbreak-cta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
